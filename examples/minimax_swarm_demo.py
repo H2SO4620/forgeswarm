@@ -7,11 +7,16 @@ into a task graph, the implementer claims tasks / reads briefings / submits
 work, the reviewer approves or bounces it, and the loop runs until the board
 is green.
 
-Setup:
+Setup (MiniMax platform):
     pip install "forgeswarm[demo]"
     export MINIMAX_API_KEY=sk-...           (set on Windows)
     # optional: MINIMAX_BASE_URL (default https://api.minimax.io/v1)
     #           MINIMAX_MODEL    (default MiniMax-M3)
+
+Setup (via OpenRouter — same M3 model, lower minimum top-up):
+    export MINIMAX_API_KEY=sk-or-...
+    export MINIMAX_BASE_URL=https://openrouter.ai/api/v1
+    export MINIMAX_MODEL=minimax/minimax-m3
 
 Run:
     python examples/minimax_swarm_demo.py "Build a CLI pomodoro timer in Python"

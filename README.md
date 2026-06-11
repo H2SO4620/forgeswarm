@@ -126,6 +126,14 @@ set MINIMAX_API_KEY=sk-...        # export on macOS/Linux
 python examples/minimax_swarm_demo.py "Build a CLI pomodoro timer in Python"
 ```
 
+M3 is also available through OpenRouter (same model, smaller minimum top-up):
+
+```bash
+set MINIMAX_API_KEY=sk-or-...
+set MINIMAX_BASE_URL=https://openrouter.ai/api/v1
+set MINIMAX_MODEL=minimax/minimax-m3
+```
+
 No API key handy? [`examples/quickstart_client.py`](examples/quickstart_client.py)
 walks the identical workflow with a scripted client — no LLM required:
 
