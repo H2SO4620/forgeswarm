@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "forgeswarm": {
+      "command": "uvx",
+      "args": ["forgeswarm"],
+      "env": {
+        "FORGESWARM_DB": "~/.forgeswarm/forgeswarm.db"
+      }
+    }
+  }
+}
