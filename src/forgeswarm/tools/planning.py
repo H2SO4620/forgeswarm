@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..models import Project, Task
 from ..store import Store, StoreError
@@ -21,6 +22,19 @@ class PlannedTask(BaseModel):
         default_factory=list,
         description="Zero-based indexes of earlier tasks IN THIS PLAN that must finish first.",
     )
+
+    @field_validator("depends_on", mode="before")
+    @classmethod
+    def _coerce_depends_on(cls, v):
+        """Some clients send this as a JSON-encoded string (e.g. "[0]") or a bare index."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            v = v.strip()
+            v = json.loads(v) if v else []
+        if isinstance(v, (int, str)):
+            v = [v]
+        return [int(x) for x in v]
 
 
 def register(mcp: FastMCP, store: Store) -> None:

@@ -81,12 +81,14 @@ async def run_agent(session: ClientSession, openai_tools: list[dict],
             return msg.content or ""
         for tc in msg.tool_calls:
             args = json.loads(tc.function.arguments or "{}")
-            print(f"  [{name}] -> {tc.function.name}({json.dumps(args)[:120]})")
             result = await session.call_tool(tc.function.name, args)
+            text = tool_result_text(result)
+            status = "ERR" if result.isError else "ok"
+            print(f"  [{name}] -> {tc.function.name}({json.dumps(args)[:100]}) [{status}] {text[:150]}")
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
-                "content": tool_result_text(result)[:8000],
+                "content": text[:8000],
             })
     return "(turn ended: step limit reached)"
 
@@ -98,8 +100,13 @@ async def get_prompt_text(session: ClientSession, name: str, args: dict) -> str:
 
 async def fetch(session: ClientSession, tool: str, **kwargs):
     result = await session.call_tool(tool, kwargs)
+    if result.isError:
+        raise RuntimeError(f"{tool} failed: {tool_result_text(result)}")
     sc = result.structuredContent
-    return sc["result"] if sc and set(sc.keys()) == {"result"} else sc
+    if sc is not None:
+        return sc["result"] if set(sc.keys()) == {"result"} else sc
+    # Plain `dict` return types aren't put in structuredContent by FastMCP.
+    return json.loads(result.content[0].text)
 
 
 async def main() -> None:

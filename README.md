@@ -47,7 +47,7 @@ forgeswarm
 From source:
 
 ```bash
-git clone https://github.com/paulchristian/forgeswarm && cd forgeswarm
+git clone https://github.com/H2SO4620/forgeswarm && cd forgeswarm
 pip install -e ".[dev]"
 pytest   # 20 tests, including end-to-end MCP client sessions
 ```

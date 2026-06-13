@@ -28,7 +28,7 @@ dev = ["pytest>=8.0", "ruff>=0.5", "openai>=1.40"]
 forgeswarm = "forgeswarm.server:main"
 
 [project.urls]
-Homepage = "https://github.com/paulchristian/forgeswarm"
+Homepage = "https://github.com/H2SO4620/forgeswarm"
 
 [build-system]
 requires = ["hatchling"]
