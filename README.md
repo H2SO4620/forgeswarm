@@ -1,5 +1,8 @@
 # ForgeSwarm 🛠️🐝
 
+[![CI](https://github.com/H2SO4620/forgeswarm/actions/workflows/ci.yml/badge.svg)](https://github.com/H2SO4620/forgeswarm/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **An MCP server that turns independent AI agents into a coordinated engineering team.**
 
 Most MCP servers give agents *data* (GitHub, databases, web). ForgeSwarm gives them
