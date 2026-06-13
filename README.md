@@ -38,21 +38,13 @@ so correctness doesn't depend on prompt discipline:
 
 ## Install
 
-```bash
-# with uv (recommended)
-uvx forgeswarm
-
-# or with pip
-pip install forgeswarm
-forgeswarm
-```
-
-From source:
+From source (not yet on PyPI):
 
 ```bash
 git clone https://github.com/H2SO4620/forgeswarm && cd forgeswarm
 pip install -e ".[dev]"
 pytest   # 20 tests, including end-to-end MCP client sessions
+forgeswarm
 ```
 
 ### Transports
@@ -132,7 +124,7 @@ goal into a task graph, the implementer claims tasks and submits work, the revie
 approves or bounces it, and the loop runs until the board is green.
 
 ```bash
-pip install "forgeswarm[demo]"
+pip install -e ".[demo]"
 set MINIMAX_API_KEY=sk-...        # export on macOS/Linux
 python examples/minimax_swarm_demo.py "Build a CLI pomodoro timer in Python"
 ```
