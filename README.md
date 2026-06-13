@@ -149,6 +149,38 @@ walks the identical workflow with a scripted client — no LLM required:
 python examples/quickstart_client.py
 ```
 
+### Verified run
+
+A real run of the M3 swarm against `"Build a CLI pomodoro timer in Python"`
+went from a bare goal to a finished, reviewed project with **zero human
+intervention** — three M3 agents talking only through ForgeSwarm tools:
+
+1. **`m3-planner`** registered itself, created the project, decomposed the
+   goal into 8 dependency-ordered tasks (scaffold → timer state machine →
+   config → notifier → CLI → tests → docs), and recorded 4 architectural
+   decisions (stdlib-only, foreground blocking timer, XDG config path,
+   stderr UI honoring `NO_COLOR`).
+2. **`m3-impl-1`** claimed each ready task in dependency order, wrote the
+   source via `save_context`, and `submit_for_review`'d every deliverable.
+3. **`m3-reviewer-1`** pulled the review queue, cross-checked each
+   submission against `get_briefing` (goal, constraints, decisions, prior
+   feedback), and `post_review`'d a verdict for each.
+
+The board went **8/8 done**, and the closing `standup_summary` prompt — also
+answered by M3, purely from live board state — correctly reported:
+
+> All planned work is complete – 8/8 tasks closed... The project is
+> feature-complete: scaffold, timer FSM, config, notifications, CLI, tests,
+> and docs are all landed.
+>
+> **Single Most Important Next Action:** Run a full end-to-end smoke test of
+> the shipped CLI... and, if green, tag `v0.1.0` and cut a release. Until we
+> exercise the integrated binary, the "done" labels reflect unit-level
+> completion only.
+
+No agent ever had to be told what another agent decided, claimed, or
+reviewed — every coordination fact came from ForgeSwarm's shared state.
+
 ## Architecture
 
 ```
