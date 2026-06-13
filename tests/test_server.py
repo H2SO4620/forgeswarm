@@ -33,6 +33,8 @@ async def test_tools_resources_prompts_are_exposed(server):
             "list_tasks", "claim_task", "update_task", "complete_task", "get_task_graph",
             "save_context", "search_context", "record_decision", "get_briefing",
             "submit_for_review", "get_review_queue", "post_review", "run_checks",
+            "open_discussion", "post_to_discussion", "resolve_discussion", "list_discussions",
+            "list_workflow_templates", "get_workflow_template", "get_retrospective",
         }
         assert expected <= tools
         prompts = {p.name for p in (await session.list_prompts()).prompts}
@@ -80,6 +82,28 @@ async def test_full_swarm_workflow_over_mcp(server, tmp_path):
         res = await session.read_resource(f"swarm://project/{project['id']}/status")
         status = json.loads(res.contents[0].text)
         assert status["done"] is True
+
+
+async def test_template_to_plan_and_discussion_over_mcp(server):
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        template = await call(session, "get_workflow_template", name="debug-issue")
+        project = await call(session, "create_project", goal="Fix the login bug")
+        plan = await call(session, "submit_plan", project_id=project["id"],
+                          tasks=template["tasks"])
+        assert len(plan["created_tasks"]) == len(template["tasks"])
+
+        disc = await call(session, "open_discussion", project_id=project["id"],
+                          topic="Hotfix now or proper fix?", agent_id="impl-1")
+        await call(session, "post_to_discussion", discussion_id=disc["id"],
+                   agent_id="impl-1", position="hotfix, users are blocked")
+        await call(session, "post_to_discussion", discussion_id=disc["id"],
+                   agent_id="rev-1", position="proper fix, hotfix risks regression")
+        resolved = await call(session, "resolve_discussion", discussion_id=disc["id"],
+                              agent_id="rev-1", resolution="Hotfix now, proper fix follows")
+        assert resolved["recorded_decision"]["decision"].startswith("Hotfix now")
+
+        retro = await call(session, "get_retrospective", project_id=project["id"])
+        assert retro["totals"]["decisions_recorded"] == 1
 
 
 async def test_run_checks_allowlist_and_execution(server, tmp_path):

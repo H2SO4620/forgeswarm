@@ -44,6 +44,8 @@ Work loop — repeat until list_tasks(project_id={project_id}, ready_only=true) 
    constraints, decisions, and prior review feedback are binding.
 4. Do the work. Save anything other agents will need via save_context
    (tag it 'task-<id>'). Run run_checks for tests/linters where relevant.
+   If you face a contested choice, open_discussion and post your position
+   instead of deciding unilaterally; resolve_discussion makes it binding.
 5. submit_for_review with the concrete work product and an honest
    self_assessment. If a review requests changes, the task comes back to
    you: get_briefing again, address every comment, resubmit.

@@ -90,6 +90,25 @@ class CheckRun(BaseModel):
     created_at: str
 
 
+class Discussion(BaseModel):
+    id: int
+    project_id: int
+    topic: str
+    status: Literal["open", "resolved"] = "open"
+    opened_by: str = ""
+    resolution: str = ""
+    created_at: str
+    resolved_at: Optional[str] = None
+
+
+class DiscussionPost(BaseModel):
+    id: int
+    discussion_id: int
+    agent_id: str
+    position: str
+    created_at: str
+
+
 class Agent(BaseModel):
     id: str
     role: str = "any"

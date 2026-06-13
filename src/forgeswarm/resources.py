@@ -56,6 +56,21 @@ def register(mcp: FastMCP, store: Store) -> None:
         """The project's decision log (ADR-style)."""
         return _dump([d.model_dump() for d in store.list_decisions(project_id)])
 
+    @mcp.resource("swarm://project/{project_id}/discussions")
+    def project_discussions(project_id: int) -> str:
+        """Discussions on a project, including every posted position."""
+        out = []
+        for disc in store.list_discussions(project_id):
+            d = disc.model_dump()
+            d["posts"] = [p.model_dump() for p in store.discussion_posts(disc.id)]
+            out.append(d)
+        return _dump(out)
+
+    @mcp.resource("swarm://project/{project_id}/retrospective")
+    def project_retrospective(project_id: int) -> str:
+        """Live swarm-performance stats: bounce rates, iterations, per-agent numbers."""
+        return _dump(store.get_retrospective(project_id))
+
     @mcp.resource("swarm://project/{project_id}/context")
     def project_context(project_id: int) -> str:
         """Recent shared-context entries for a project."""

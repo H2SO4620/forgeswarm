@@ -24,6 +24,8 @@ from .models import (
     CheckRun,
     ContextEntry,
     Decision,
+    Discussion,
+    DiscussionPost,
     Project,
     Review,
     Submission,
@@ -105,6 +107,23 @@ CREATE TABLE IF NOT EXISTS checks (
     stdout TEXT NOT NULL DEFAULT '',
     stderr TEXT NOT NULL DEFAULT '',
     duration_seconds REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS discussions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id),
+    topic TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    opened_by TEXT NOT NULL DEFAULT '',
+    resolution TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+CREATE TABLE IF NOT EXISTS discussion_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    discussion_id INTEGER NOT NULL REFERENCES discussions(id),
+    agent_id TEXT NOT NULL,
+    position TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS agents (
@@ -546,6 +565,159 @@ class Store:
     def list_agents(self) -> list[Agent]:
         rows = self._conn.execute("SELECT * FROM agents ORDER BY id").fetchall()
         return [Agent(**dict(r)) for r in rows]
+
+    # ---------------------------------------------------------- discussions
+
+    def open_discussion(self, project_id: int, topic: str, agent_id: str = "") -> Discussion:
+        self.get_project(project_id)
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO discussions (project_id, topic, opened_by, created_at)"
+                " VALUES (?, ?, ?, ?)",
+                (project_id, topic, agent_id, _now()),
+            )
+        if agent_id:
+            self.touch_agent(agent_id)
+        return self.get_discussion(cur.lastrowid)
+
+    def get_discussion(self, discussion_id: int) -> Discussion:
+        row = self._conn.execute(
+            "SELECT * FROM discussions WHERE id=?", (discussion_id,)
+        ).fetchone()
+        if row is None:
+            raise StoreError(f"No discussion with id {discussion_id}.")
+        return Discussion(**dict(row))
+
+    def list_discussions(self, project_id: int, status: Optional[str] = None) -> list[Discussion]:
+        q = "SELECT * FROM discussions WHERE project_id=?"
+        args: list[Any] = [project_id]
+        if status:
+            q += " AND status=?"
+            args.append(status)
+        return [Discussion(**dict(r)) for r in self._conn.execute(q + " ORDER BY id", args)]
+
+    def discussion_posts(self, discussion_id: int) -> list[DiscussionPost]:
+        rows = self._conn.execute(
+            "SELECT * FROM discussion_posts WHERE discussion_id=? ORDER BY id",
+            (discussion_id,),
+        ).fetchall()
+        return [DiscussionPost(**dict(r)) for r in rows]
+
+    def post_to_discussion(
+        self, discussion_id: int, agent_id: str, position: str
+    ) -> DiscussionPost:
+        disc = self.get_discussion(discussion_id)
+        if disc.status != "open":
+            raise StoreError(
+                f"Discussion {discussion_id} is resolved: {disc.resolution!r}."
+                " Open a new discussion to revisit it."
+            )
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO discussion_posts (discussion_id, agent_id, position, created_at)"
+                " VALUES (?, ?, ?, ?)",
+                (discussion_id, agent_id, position, _now()),
+            )
+        self.touch_agent(agent_id)
+        row = self._conn.execute(
+            "SELECT * FROM discussion_posts WHERE id=?", (cur.lastrowid,)
+        ).fetchone()
+        return DiscussionPost(**dict(row))
+
+    def resolve_discussion(
+        self, discussion_id: int, agent_id: str, resolution: str, rationale: str = ""
+    ) -> dict:
+        disc = self.get_discussion(discussion_id)
+        if disc.status != "open":
+            raise StoreError(f"Discussion {discussion_id} is already resolved.")
+        posts = self.discussion_posts(discussion_id)
+        voices = {p.agent_id for p in posts}
+        # consensus needs an actual exchange, not a monologue
+        if len(voices) < 2:
+            raise StoreError(
+                f"Discussion {discussion_id} has positions from {len(voices)} agent(s);"
+                " at least 2 distinct agents must post before it can be resolved."
+            )
+        digest = "; ".join(f"{p.agent_id}: {p.position[:120]}" for p in posts[-6:])
+        decision = self.record_decision(
+            disc.project_id,
+            decision=resolution,
+            rationale=(rationale + " " if rationale else "")
+            + f"[Consensus from discussion #{discussion_id} '{disc.topic}' — {digest}]",
+            author=agent_id,
+        )
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE discussions SET status='resolved', resolution=?, resolved_at=?"
+                " WHERE id=?",
+                (resolution, _now(), discussion_id),
+            )
+        return {
+            "discussion": self.get_discussion(discussion_id).model_dump(),
+            "recorded_decision": decision.model_dump(),
+        }
+
+    # ---------------------------------------------------------------- retro
+
+    def get_retrospective(self, project_id: int) -> dict:
+        project = self.get_project(project_id)
+        tasks = self.list_tasks(project_id)
+        reviews = self._conn.execute(
+            "SELECT r.* FROM reviews r JOIN tasks t ON t.id = r.task_id WHERE t.project_id=?",
+            (project_id,),
+        ).fetchall()
+        checks = self._conn.execute(
+            "SELECT c.* FROM checks c JOIN tasks t ON t.id = c.task_id WHERE t.project_id=?",
+            (project_id,),
+        ).fetchall()
+        subs = self._conn.execute(
+            "SELECT s.* FROM submissions s JOIN tasks t ON t.id = s.task_id"
+            " WHERE t.project_id=?",
+            (project_id,),
+        ).fetchall()
+
+        bounces = sum(1 for r in reviews if r["verdict"] == "request_changes")
+        checks_passed = sum(1 for c in checks if c["exit_code"] == 0)
+
+        agents: dict[str, dict] = {}
+
+        def agent(aid: str) -> dict:
+            return agents.setdefault(
+                aid,
+                {"agent_id": aid, "tasks_completed": 0, "submissions": 0,
+                 "changes_requested_received": 0, "reviews_given": 0},
+            )
+
+        for t in tasks:
+            if t.status == "done" and t.claimed_by:
+                agent(t.claimed_by)["tasks_completed"] += 1
+        for s in subs:
+            agent(s["submitted_by"])["submissions"] += 1
+            if s["status"] == "changes_requested":
+                agent(s["submitted_by"])["changes_requested_received"] += 1
+        for r in reviews:
+            agent(r["reviewer"])["reviews_given"] += 1
+
+        hotspots = sorted(
+            ({"id": t.id, "title": t.title, "iterations": t.iteration}
+             for t in tasks if t.iteration > 0),
+            key=lambda x: -x["iterations"],
+        )
+        return {
+            "project": project.model_dump(),
+            "totals": {
+                "tasks": len(tasks),
+                "done": sum(1 for t in tasks if t.status == "done"),
+                "total_iterations": sum(t.iteration for t in tasks),
+                "reviews": len(reviews),
+                "review_bounce_rate": round(bounces / len(reviews), 2) if reviews else None,
+                "check_runs": len(checks),
+                "check_pass_rate": round(checks_passed / len(checks), 2) if checks else None,
+                "decisions_recorded": len(self.list_decisions(project_id)),
+            },
+            "agents": sorted(agents.values(), key=lambda a: a["agent_id"]),
+            "hotspots": hotspots,
+        }
 
     # ------------------------------------------------------------- briefing
 

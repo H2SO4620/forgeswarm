@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import prompts, resources
 from .store import Store
-from .tools import checks, context, planning, review, tasks
+from .tools import checks, context, discussion, planning, retro, review, tasks, templates
 
 INSTRUCTIONS = """ForgeSwarm coordinates multiple AI agents doing software engineering work.
 
@@ -25,7 +25,10 @@ Typical flow:
    do the work (save_context / record_decision / run_checks) -> submit_for_review.
 4. A different agent reviews via get_review_queue + post_review; 'request_changes'
    sends the task back to its author automatically with the feedback attached.
-5. get_task_graph / the swarm:// resources show live project state at any time.
+5. Disagreements go through open_discussion / post_to_discussion /
+   resolve_discussion — the resolution becomes a binding recorded decision.
+6. get_task_graph / get_retrospective / the swarm:// resources show live
+   project state and swarm performance at any time.
 """
 
 
@@ -39,6 +42,9 @@ def create_server(
     context.register(mcp, store)
     review.register(mcp, store)
     checks.register(mcp, store)
+    discussion.register(mcp, store)
+    templates.register(mcp, store)
+    retro.register(mcp, store)
     resources.register(mcp, store)
     prompts.register(mcp, store)
     return mcp

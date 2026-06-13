@@ -29,6 +29,8 @@ so correctness doesn't depend on prompt discipline:
 | "Done" is just an assertion | `submit_for_review` → a *different* agent must `post_review`; self-review is rejected; `request_changes` auto-returns the task to its author with feedback attached and bumps the iteration counter |
 | "Tests pass, trust me" | `run_checks` runs allowlisted test/lint commands with a hard timeout and records exit code + output on the task as review evidence |
 | Crashed agent stalls the swarm | Claims carry leases; expired leases put tasks back on the board automatically |
+| Disagreements evaporate into chat | `open_discussion` → positions from ≥2 distinct agents (server-enforced) → `resolve_discussion` auto-records the consensus as a binding decision in every future briefing |
+| The swarm never learns | `get_retrospective` compiles hard evidence — review bounce rates, check pass rates, per-agent stats, hotspot tasks — for the swarm to analyze and act on |
 | State lost between sessions | Everything persists in SQLite (WAL) — swarms survive restarts and work across both transports |
 
 ## Install
@@ -47,7 +49,7 @@ From source:
 ```bash
 git clone https://github.com/paulchristian/forgeswarm && cd forgeswarm
 pip install -e ".[dev]"
-pytest   # 16 tests, including end-to-end MCP client sessions
+pytest   # 20 tests, including end-to-end MCP client sessions
 ```
 
 ### Transports
@@ -91,7 +93,7 @@ flowchart LR
     D --> B
 ```
 
-## Tools (18)
+## Tools (24)
 
 **Planning** — `create_project`, `submit_plan` (whole dependency graph in one call), `list_projects`, `register_agent`
 
@@ -101,13 +103,19 @@ flowchart LR
 
 **Review loop** — `submit_for_review`, `get_review_queue`, `post_review`
 
-**Verification** — `run_checks` (allowlisted: pytest, ruff, mypy, npm, cargo, go, …; no shell, hard timeout, evidence recorded)
+**Discussion & consensus** — `open_discussion`, `post_to_discussion`, `resolve_discussion` (consensus becomes a recorded decision automatically), `list_discussions`
+
+**Workflow templates** — `list_workflow_templates`, `get_workflow_template` (`ship-feature`, `refactor-module`, `debug-issue` — dependency-wired task graphs ready for `submit_plan`)
+
+**Verification & reflection** — `run_checks` (allowlisted: pytest, ruff, mypy, npm, cargo, go, …; no shell, hard timeout, evidence recorded), `get_retrospective` (swarm performance evidence: bounce rates, iterations, per-agent stats)
 
 ## Resources & Prompts
 
 Live swarm state, readable without tool calls:
 `swarm://projects` · `swarm://agents` · `swarm://project/{id}/status` ·
-`swarm://project/{id}/tasks` · `swarm://project/{id}/decisions` · `swarm://project/{id}/context`
+`swarm://project/{id}/tasks` · `swarm://project/{id}/decisions` ·
+`swarm://project/{id}/discussions` · `swarm://project/{id}/retrospective` ·
+`swarm://project/{id}/context`
 
 Role prompts that make any MCP client swarm-ready in one message:
 `planner` · `implementer` · `reviewer` · `standup_summary` (rendered from live board state)
