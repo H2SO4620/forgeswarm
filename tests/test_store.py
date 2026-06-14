@@ -134,3 +134,55 @@ def test_briefing_bundles_everything(store, project):
                                        "summary": "two tables: users, links"}]
     assert any(d.decision == "Use SQLite" for d in b.decisions)
     assert any("301" in c.content for c in b.related_context)
+
+
+def test_release_task_returns_to_open_and_reclaimable(store, project):
+    """AC-1 happy path + AC-2: a released task is open and immediately re-claimable."""
+    t = store.create_task(project.id, "task")
+    store.claim_task(t.id, "agent-a")
+    released = store.release_task(t.id, "agent-a", reason="wrong role")
+    assert released.status == "open"
+    assert released.claimed_by is None
+    assert released.lease_expires_at is None
+
+    # AC-2: another agent can claim right away, no lease wait
+    reassigned = store.claim_task(t.id, "agent-b")
+    assert reassigned.claimed_by == "agent-b"
+    assert reassigned.status == "claimed"
+    assert reassigned.lease_expires_at is not None
+
+
+def test_release_task_rejects_non_holder(store, project):
+    """AC-1 ownership-failure path: only the claimant can release a task."""
+    t = store.create_task(project.id, "task")
+    store.claim_task(t.id, "agent-a")
+    with pytest.raises(StoreError, match="agent-a"):
+        store.release_task(t.id, "agent-b", reason="not mine to give back")
+    # the task remains held by the original claimant and is still claimable by them
+    after = store.get_task(t.id)
+    assert after.status == "claimed"
+    assert after.claimed_by == "agent-a"
+
+
+def test_release_task_records_reason_in_context(store, project):
+    """AC-3: a non-empty reason lands in save_context with the task-<id> tag;
+    an empty/whitespace reason writes nothing."""
+    t = store.create_task(project.id, "task")
+    store.claim_task(t.id, "agent-a")
+    store.release_task(t.id, "agent-a", reason="blocked on external API key")
+
+    hits = store.search_context(t.project_id, "blocked")
+    matches = [h for h in hits if "blocked on external API key" in h.content]
+    assert matches, f"expected reason in context, got {[h.content for h in hits]}"
+    entry = matches[0]
+    assert entry.author == "agent-a"
+
+    # empty / whitespace-only reason -> no extra context entry
+    for reason, agent in (("", "agent-b"), ("   \t  ", "agent-c")):
+        t = store.create_task(project.id, f"task-{agent}")
+        store.claim_task(t.id, agent)
+        before = store.search_context(project.id, "release")
+        store.release_task(t.id, agent, reason=reason)
+        assert store.search_context(project.id, "release") == before, (
+            f"reason={reason!r} should not write a context entry"
+        )

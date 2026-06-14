@@ -40,6 +40,24 @@ def register(mcp: FastMCP, store: Store) -> None:
         return store.claim_task(task_id, agent_id, lease_seconds=lease_seconds)
 
     @mcp.tool()
+    def release_task(task_id: int, agent_id: str, reason: str = "") -> Task:
+        """Voluntarily give back a task you claimed, returning it to the open board.
+
+        Use this when you have claimed a task but realised you cannot finish it
+        (wrong skill set, dependencies shifted, higher-priority work appeared).
+        The task becomes immediately claimable by another agent.
+
+        Prefer this over letting the lease expire when you are still alive and
+        can act — an explicit release is faster and records your reason in
+        shared context so the next claimant understands why. Letting the lease
+        expire is only the fallback for crashed or unreachable agents.
+
+        For ordinary progress updates that should KEEP the task claimed, use
+        update_task instead.
+        """
+        return store.release_task(task_id, agent_id, reason=reason)
+
+    @mcp.tool()
     def update_task(
         task_id: int,
         agent_id: str,
