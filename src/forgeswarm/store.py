@@ -303,6 +303,37 @@ class Store:
         self.touch_agent(agent_id)
         return self.get_task(task_id)
 
+    def release_task(
+        self, task_id: int, agent_id: str, reason: str = ""
+    ) -> Task:
+        task = self.get_task(task_id)
+        if task.claimed_by and task.claimed_by != agent_id:
+            raise StoreError(f"Task {task_id} is claimed by {task.claimed_by}, not {agent_id}.")
+        if task.status not in ("claimed", "in_progress"):
+            raise StoreError(
+                f"Task {task_id} is '{task.status}';"
+                " only claimed/in_progress tasks can be released."
+            )
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "UPDATE tasks SET status='open', claimed_by=NULL, lease_expires_at=NULL,"
+                " updated_at=? WHERE id=? AND claimed_by=?"
+                " AND status IN ('claimed', 'in_progress')",
+                (_now(), task_id, agent_id),
+            )
+        if cur.rowcount != 1:
+            raise StoreError(f"Task {task_id} state changed during release; try again.")
+        if reason.strip():
+            self.save_context(
+                task.project_id,
+                key=f"task-{task_id}-release-{_now()}",
+                content=reason.strip(),
+                tags=[f"task-{task_id}"],
+                author=agent_id,
+            )
+        self.touch_agent(agent_id)
+        return self.get_task(task_id)
+
     def update_task(
         self,
         task_id: int,
